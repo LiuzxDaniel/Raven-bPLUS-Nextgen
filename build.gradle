@@ -1,71 +1,87 @@
-
-// For those who want the bleeding edge
 buildscript {
     repositories {
-        jcenter()
         maven {
             name = "forge"
-            url = "http://files.minecraftforge.net/maven"
+            url = "https://maven.minecraftforge.net"
+        }
+        maven {
+            url 'https://repo.spongepowered.org/maven'
         }
     }
     dependencies {
         classpath 'net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT'
         classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
+        classpath 'org.spongepowered:mixingradle:0.6-SNAPSHOT'
+        classpath "org.projectlombok:lombok:1.18.22"
     }
 }
 
 apply plugin: 'com.github.johnrengelman.shadow'
 apply plugin: 'net.minecraftforge.gradle.forge'
+apply plugin: 'org.spongepowered.mixin'
 apply plugin: 'java'
+
+group = "keystrokesmod"
+archivesBaseName = "raven-XD"
+//version = "Dev"
+
 compileJava {
     sourceCompatibility = '1.8'
     targetCompatibility = '1.8'
+    options.encoding = 'UTF-8'
 }
-
-
-dependencies {
-    implementation group: 'commons-io', name: 'commons-io', version: '2.11.0'
-    compile fileTree(dir: "lib", include: "discord-rpc.jar")
-}
-
-
-/*
-// for people who want stable - not yet functional for MC 1.8.8 - we require the forgegradle 2.1 snapshot
-plugins {
-    id "net.minecraftforge.gradle.forge" version "2.0.2"
-}
-*/
-
-version = "1.2"
-group = "keystrokesmod"
-archivesBaseName = "[1.8.9] BetterKeystrokes V"
 
 minecraft {
     version = "1.8.9-11.15.1.2318-1.8.9"
     runDir = "run"
 
     mappings = "stable_20"
-    //clientJvmArgs += "-Dfml.coreMods.load=keystrokesmod.sToNkS.tweaker.FMLLoadingPlugin"
+    makeObfSourceJar = false
+    clientJvmArgs += '-Dfml.coreMods.load=keystrokesmod.mixins.MixinLoader'
 }
 
-/* -Dfml.coreMods.load=keystrokesmod.sToNkS.tweaker.FMLLoadingPlugin*/
-jar {
-    enabled = false
-    dependsOn(shadowJar { classifier = null })
-}
-
-shadowJar {
-    manifest {
-        attributes(
-                "FMLCorePlugin": "keystrokesmod.client.tweaker.FMLLoadingPlugin",
-                "ForceLoadAsMod": true,
-                FMLCorePluginContainsFMLMod: true,
-                "ModSide": "CLIENT"
-        )
+mixin {
+    defaultObfuscationEnv searge
+    sourceSets {
+        main {
+            ext.refMap = 'mixins.raven.refmap.json'
+        }
     }
 }
-reobf {
-    shadowJar {} // Reobfuscate the shadowed JAR
+
+repositories {
+    mavenCentral()
+    maven {
+        url 'https://repo.spongepowered.org/maven'
+    }
+}
+
+configurations {
+    embed
+    compile.extendsFrom embed
+}
+
+dependencies {
+    implementation group: 'commons-io', name: 'commons-io', version: '2.14.0'
+    embed('org.spongepowered:mixin:0.6-SNAPSHOT') {
+        exclude module: 'gson'
+        exclude module: 'guava'
+        exclude module: 'jarjar'
+        exclude module: 'commons-codec'
+        exclude module: 'commons-io'
+        exclude module: 'launchwrapper'
+        exclude module: 'asm-commons'
+        exclude module: 'slf4j-api'
+    }
+    implementation 'org.projectlombok:lombok:1.18.34'
+    implementation 'org.jetbrains:annotations:24.1.0'
+    implementation files('libraries/fastutil-core-8.5.14.jar')
+    implementation files('libraries/json-20220924.jar')
+    implementation files('libraries/discord-rpc.jar')
+
+    embed files('libraries/fastutil-core-8.5.14.jar')
+    embed files('libraries/json-20220924.jar')
+    embed files('libraries/discord-rpc.jar')
 }
 
 processResources {
@@ -80,5 +96,45 @@ processResources {
 
     from(sourceSets.main.resources.srcDirs) {
         exclude 'mcmod.info'
+    }
+}
+
+jar {
+    from(configurations.embed.collect {
+        it.isDirectory() ? it : zipTree(it)
+    }) {
+        exclude 'dummyThing',
+                'LICENSE.txt',
+                'LICENSE',
+                'AUTHORS',
+                'README.md',
+                'META-INF/MUMFREY.RSA',
+                'META-INF/maven/**',
+                'org/**/*.html',
+                'release-timestamp.txt',
+                'changelog.txt'
+    }
+    manifest {
+        attributes(
+                'MixinConfigs': 'mixins.raven.json',
+                'TweakClass': 'org.spongepowered.asm.launch.MixinTweaker',
+                'TweakOrder': 0,
+                "FMLCorePlugin": "keystrokesmod.mixins.MixinLoader",
+                "ForceLoadAsMod": true,
+                'FMLCorePluginContainsFMLMod': true,
+                "ModSide": "CLIENT"
+        )
+    }
+}
+
+task copyDep(type: Copy){
+    from configurations.runtimeClasspath
+    into 'dependencies'
+}
+
+
+reobf {
+    jar {
+        mappingType = "SEARGE"
     }
 }
